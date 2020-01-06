@@ -3,6 +3,7 @@
 @author: Ye Shengnan
 create: 2019-12-27
 """
+import sys
 from argparse import ArgumentParser
 
 import cv2
@@ -15,10 +16,8 @@ def build_parser():
     parser.add_argument('--watermark', dest='wm', required=True, help='watermark image file')
     parser.add_argument('--out', dest='out', required=True, help='output image file')
     parser.add_argument('--alpha', dest='alpha', default=10)
-    parser.add_argument('--percent_size', dest='size_percent', default=30,
-                        help='watermark size on source image by percent. percent_size + percent_offset < 50')
-    parser.add_argument('--percent_offset', dest='offset_percent', default=5,
-                        help='watermark position on source image by percent')
+    parser.add_argument('--size_percent', dest='size_percent', default=30, help='watermark size ratio to source')
+    parser.add_argument('--offset_percent', dest='offset_percent', default=5, help='watermark offset to source center')
     return parser
 
 
@@ -29,12 +28,15 @@ def main():
     wm = options.wm
     out = options.out
     alpha = float(options.alpha)
-    percent_size = float(options.percent_size)
-    percent_offset = float(options.percent_offset)
-    encode(img, wm, out, alpha, percent_size, percent_offset)
+    size_percent = float(options.size_percent)
+    offset_percent = float(options.offset_percent)
+    if size_percent + offset_percent > 50:
+        print('size_percent + offset_percent should less than 50')
+        return sys.exit(-1)
+    encode(img, wm, out, alpha, size_percent, offset_percent)
 
 
-def encode(img_path, wm_path, out_path, alpha, percent_size, percent_offset):
+def encode(img_path, wm_path, out_path, alpha, size_percent, offset_percent):
     # read source
     img = cv2.imread(img_path)
     img_h, img_w, img_c = np.shape(img)
@@ -54,8 +56,8 @@ def encode(img_path, wm_path, out_path, alpha, percent_size, percent_offset):
         wm = rgb_channels.astype(np.float32) * alpha_factor
 
     # scale watermark to percent size
-    dst_w = int(img_w * percent_size / 100)
-    dst_h = int(img_h * percent_size / 100)
+    dst_w = int(img_w * size_percent / 100)
+    dst_h = int(img_h * size_percent / 100)
     scale = dst_w / wm_w
     if dst_w / wm_w > dst_h / wm_h:
         scale = dst_h / wm_h
@@ -66,9 +68,12 @@ def encode(img_path, wm_path, out_path, alpha, percent_size, percent_offset):
     print('dst_w:%d, dst_h:%d, scaled_w:%d, scaled_h:%d, scaled_c:%d' % (dst_w, dst_h, scaled_w, scaled_h, scaled_c))
 
     # place watermark to transparent image
-    offset_x = int(img_w * percent_offset / 100)
-    offset_y = int(img_h * percent_offset / 100)
+    offset_x = int(img_w * offset_percent / 100)
+    offset_y = int(img_h * offset_percent / 100)
     print('offset_x:%d, offset_y:%d' % (offset_x, offset_y))
+    offset_x = int(img_w / 2) - offset_x - scaled_w
+    offset_y = int(img_h / 2) - offset_y - scaled_h
+    print('modified offset_x:%d, offset_y:%d' % (offset_x, offset_y))
     tmp = np.zeros(img.shape)
     for i in range(scaled_h):
         for j in range(scaled_w):
